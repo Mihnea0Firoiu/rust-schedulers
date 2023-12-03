@@ -8,7 +8,7 @@ use std::num::NonZeroUsize;
 
 mod scheduler;
 
-use schedulers::Empty;
+//use schedulers::Empty;
 
 pub use crate::scheduler::{
     Pid, Process, ProcessState, Scheduler, SchedulingDecision, StopReason, Syscall, SyscallResult,
@@ -18,6 +18,10 @@ mod schedulers;
 
 // TODO import your scheduler here
 // This example imports the Empty scheduler
+
+use schedulers::RoundRobin;
+use schedulers::PriorityQueue;
+use schedulers::Cfs;
 
 /// Returns a structure that implements the `Scheduler` trait with a round robin scheduler policy
 ///
@@ -30,7 +34,7 @@ mod schedulers;
 ///                                 the `minimum_remaining_timeslice` value.
 #[allow(unused_variables)]
 pub fn round_robin(timeslice: NonZeroUsize, minimum_remaining_timeslice: usize) -> impl Scheduler {
-    Empty
+    RoundRobin::new(timeslice, minimum_remaining_timeslice)
 }
 
 /// Returns a structure that implements the `Scheduler` trait with a priority queue scheduler policy
@@ -46,7 +50,7 @@ pub fn priority_queue(
     timeslice: NonZeroUsize,
     minimum_remaining_timeslice: usize,
 ) -> impl Scheduler {
-    Empty
+    PriorityQueue
 }
 
 /// Returns a structure that implements the `Scheduler` trait with a simplified [cfs](https://opensource.com/article/19/2/fair-scheduling-linux) scheduler policy
@@ -60,5 +64,5 @@ pub fn priority_queue(
 ///                                 the `minimum_remaining_timeslice` value.
 #[allow(unused_variables)]
 pub fn cfs(cpu_time: NonZeroUsize, minimum_remaining_timeslice: usize) -> impl Scheduler {
-    Empty
+    Cfs
 }

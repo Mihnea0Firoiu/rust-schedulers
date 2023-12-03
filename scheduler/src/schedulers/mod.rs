@@ -15,3 +15,12 @@ mod empty;
 pub use empty::Empty;
 
 // TODO import your schedulers here
+
+mod round_robin;
+pub use round_robin::RoundRobin;
+
+mod priority_queue;
+pub use priority_queue::PriorityQueue;
+
+mod cfs;
+pub use cfs::Cfs;
