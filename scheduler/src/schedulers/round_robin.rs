@@ -168,7 +168,7 @@ impl Scheduler for RoundRobin {
 
         if let Some(process) = &mut self.running_process {
             let timeslice = self.timeslice;
-            if process.remaining_slices < self.minimum_remaining_timeslice { //time?
+            if process.remaining_slices < self.minimum_remaining_timeslice {
                 process.remaining_slices = timeslice;
 
                 process.state = ProcessState::Ready;
@@ -190,10 +190,6 @@ impl Scheduler for RoundRobin {
                 crate::SchedulingDecision::Run { pid: first_element.pid(), timeslice: NonZeroUsize::new(first_element.remaining_slices).unwrap() }
             },
             None => {
-                if self.all_waiting() {
-                    return crate::SchedulingDecision::Deadlock;
-                }
-
                 self.time_jump = self.minimum_sleeping_duration();
                 if self.time_jump != 0 {
                     return crate::SchedulingDecision::Sleep(NonZeroUsize::new(self.time_jump).unwrap());
@@ -201,6 +197,10 @@ impl Scheduler for RoundRobin {
                 
                 if self.ready_process_queue.is_empty() && self.waiting_process_queue.is_empty() {
                     return crate::SchedulingDecision::Done;
+                }
+
+                if self.all_waiting() == true {
+                    return crate::SchedulingDecision::Deadlock;
                 }
                 
                 crate::SchedulingDecision::Panic
