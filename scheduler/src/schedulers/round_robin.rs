@@ -84,7 +84,8 @@ pub struct RoundRobin {
     pub running_process: Option<ProcessInfo>,
     pub ready_process_queue: VecDeque<ProcessInfo>,
     pub waiting_process_queue: VecDeque<ProcessInfo>,
-    pub time_jump: usize
+    pub time_jump: usize,
+    pub killed_init: bool
 }
 
 impl RoundRobin {
@@ -96,7 +97,8 @@ impl RoundRobin {
             running_process: None,
             ready_process_queue: VecDeque::new(),
             waiting_process_queue: VecDeque::new(),
-            time_jump: 0
+            time_jump: 0,
+            killed_init: false
         }
     }
 
@@ -157,10 +159,23 @@ impl RoundRobin {
             self.waiting_process_queue.remove(index);
         }
     }
+
+    pub fn killed_init(&self) -> bool {
+        if !self.waiting_process_queue.is_empty() || !self.ready_process_queue.is_empty() {
+            if self.killed_init == true {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl Scheduler for RoundRobin {
     fn next(&mut self) -> crate::SchedulingDecision {
+        if self.killed_init() {
+            return crate::SchedulingDecision::Panic;
+        }
+
         if self.time_jump != 0 {
             self.time_master(self.time_jump, 0);
             self.time_jump = 0;
@@ -320,6 +335,12 @@ impl Scheduler for RoundRobin {
                     Syscall::Exit => {
                         if self.running_process.is_none() {
                             return crate::SyscallResult::NoRunningProcess;
+                        }
+
+                        if let Some(process) = &self.running_process {
+                            if process.pid == Pid::new(1) {
+                                self.killed_init = true;
+                            }
                         }
 
                         self.running_process = None;
