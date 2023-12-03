@@ -167,7 +167,7 @@ impl Scheduler for RoundRobin {
         }
 
         if let Some(process) = &mut self.running_process {
-            let timeslice = self.timeslice;
+            let mut timeslice = self.timeslice;
             if process.remaining_slices < self.minimum_remaining_timeslice {
                 process.remaining_slices = timeslice;
 
@@ -178,6 +178,7 @@ impl Scheduler for RoundRobin {
                 self.running_process = None;
 
             } else {
+                timeslice = process.remaining_slices;
                 return crate::SchedulingDecision::Run { pid: process.pid(), timeslice: NonZeroUsize::new(timeslice).unwrap() };
             }
         }
