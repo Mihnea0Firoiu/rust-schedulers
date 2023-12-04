@@ -154,7 +154,7 @@ impl RoundRobin {
             }
             index += 1;
         }
-
+        
         for index in index_vec {
             self.waiting_process_queue.remove(index);
         }
