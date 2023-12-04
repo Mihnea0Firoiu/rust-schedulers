@@ -147,6 +147,7 @@ impl RoundRobin {
                     waiting_process.sleep_time = waiting_process.sleep_time - (beginning - end);
                 } else {
                     waiting_process.sleep_time = 0;
+                    waiting_process.remaining_slices = self.timeslice;
                     waiting_process.state = ProcessState::Ready;
                     self.ready_process_queue.push_back(waiting_process.clone());
                     index_vec.push_back(index);
