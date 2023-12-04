@@ -281,9 +281,6 @@ impl Scheduler for PriorityQueue {
                 }
 
                 if let Some(process) = &mut self.running_process {
-                    // if process.priority < process.initial_priority && remaining < self.minimum_remaining_timeslice {
-                    //     process.priority += 1;
-                    // }
 
                     process.timings.1 += 1;
                     process.timings.2 = process.timings.2 + process.remaining_slices - remaining - 1;
@@ -294,6 +291,12 @@ impl Scheduler for PriorityQueue {
                     Syscall::Fork(priority) => {
                         if self.running_process.is_none() && self.last_pid != 0 {
                             return crate::SyscallResult::NoRunningProcess;
+                        }
+
+                        if let Some(process) = &mut self.running_process {
+                            if process.priority < process.initial_priority {
+                                process.priority += 1;
+                            }
                         }
                         
                         self.last_pid += 1;
