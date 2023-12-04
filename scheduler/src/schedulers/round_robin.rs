@@ -149,7 +149,7 @@ impl RoundRobin {
                     waiting_process.sleep_time = 0;
                     waiting_process.state = ProcessState::Ready;
                     self.ready_process_queue.push_back(waiting_process.clone());
-                    index_vec.push_back(index);
+                    index_vec.push_front(index);
                 }
             }
             index += 1;
@@ -309,8 +309,8 @@ impl Scheduler for RoundRobin {
                             return crate::SyscallResult::NoRunningProcess;
                         }    
 
-                        let mut index = 0;
-                        let mut index_vec = VecDeque::<usize>::new();
+                        let mut index: usize = 0;
+                        let mut index_vec = VecDeque::new();
 
                         for process in &mut self.waiting_process_queue {
                             match process.state {
@@ -319,7 +319,7 @@ impl Scheduler for RoundRobin {
                                         if event == event_number {
                                             process.state = ProcessState::Ready;
                                             self.ready_process_queue.push_back(process.clone());
-                                            index_vec.push_back(index);
+                                            index_vec.push_front(index);
                                         }
                                     }
                                 }
