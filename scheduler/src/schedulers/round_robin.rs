@@ -143,7 +143,7 @@ impl RoundRobin {
         for waiting_process in &mut self.waiting_process_queue {
             waiting_process.timings.0 = waiting_process.timings.0 + beginning - end;
             if waiting_process.sleep_time > 0 {
-                if waiting_process.sleep_time - (beginning - end) > 0 {
+                if waiting_process.sleep_time > (beginning - end) {
                     waiting_process.sleep_time = waiting_process.sleep_time - (beginning - end);
                 } else {
                     waiting_process.sleep_time = 0;
