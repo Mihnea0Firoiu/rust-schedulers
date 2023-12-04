@@ -121,7 +121,7 @@ impl RoundRobin {
         for process in &self.waiting_process_queue {
             if min == 0 && process.sleep_time != 0 {
                 min = process.sleep_time;
-            } else if min != 0 && process.sleep_time < min {
+            } else if min != 0 && process.sleep_time < min && process.sleep_time != 0 {
                 min = process.sleep_time;
             }
         }
@@ -147,7 +147,6 @@ impl RoundRobin {
                     waiting_process.sleep_time = waiting_process.sleep_time - (beginning - end);
                 } else {
                     waiting_process.sleep_time = 0;
-                    waiting_process.remaining_slices = self.timeslice;
                     waiting_process.state = ProcessState::Ready;
                     self.ready_process_queue.push_back(waiting_process.clone());
                     index_vec.push_back(index);
@@ -282,6 +281,7 @@ impl Scheduler for RoundRobin {
                         if let Some(process) = &mut self.running_process {
                             process.sleep_time = time;
                             process.state = ProcessState::Waiting { event: None };
+                            process.remaining_slices = self.timeslice;
                             self.waiting_process_queue.push_back(process.clone());
                         }
 
@@ -296,6 +296,7 @@ impl Scheduler for RoundRobin {
 
                         if let Some(process) = &mut self.running_process {
                             process.state = ProcessState::Waiting { event: Some(event_number) };
+                            process.remaining_slices = self.timeslice;
                             self.waiting_process_queue.push_back(process.clone());
                         }
 
