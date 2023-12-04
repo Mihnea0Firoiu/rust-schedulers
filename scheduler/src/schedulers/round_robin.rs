@@ -154,7 +154,7 @@ impl RoundRobin {
             }
             index += 1;
         }
-        
+
         for index in index_vec {
             self.waiting_process_queue.remove(index);
         }
@@ -370,7 +370,7 @@ impl Scheduler for RoundRobin {
         }
 
         // Convert the VecDeque to Vec<&dyn Process>
-        let vec_of_trait_objects: Vec<&dyn crate::Process> = all_processes.iter().map(|p| *p).collect();
+        let vec_of_trait_objects: Vec<&dyn crate::Process> = all_processes.iter().cloned().collect();
         vec_of_trait_objects
     }
 }
