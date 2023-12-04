@@ -294,7 +294,7 @@ impl Scheduler for PriorityQueue {
                         }
 
                         if let Some(process) = &mut self.running_process {
-                            if process.priority < process.initial_priority {
+                            if process.priority < process.initial_priority && remaining >= self.minimum_remaining_timeslice {
                                 process.priority += 1;
                             }
                         }
