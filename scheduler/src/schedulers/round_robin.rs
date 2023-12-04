@@ -66,9 +66,9 @@ impl Process for ProcessInfo {
 impl Clone for ProcessInfo {
     fn clone(&self) -> Self {
         Self {
-            pid: self.pid.clone(),
-            state: self.state.clone(),
-            timings: self.timings.clone(),
+            pid: self.pid,
+            state: self.state,
+            timings: self.timings,
             priority: self.priority,
             extra: self.extra.clone(),
             remaining_slices: self.remaining_slices,
@@ -104,13 +104,8 @@ impl RoundRobin {
 
     pub fn all_waiting(&self) -> bool {
         for process in &self.waiting_process_queue {
-            match process.state {
-                ProcessState::Waiting { event } => {
-                    if let None = event {
-                        return false;
-                    }
-                }
-                _ => {}
+            if let ProcessState::Waiting { event: None } = process.state {
+                return false;
             }
         }
         true
@@ -121,7 +116,7 @@ impl RoundRobin {
         for process in &self.waiting_process_queue {
             if min == 0 && process.sleep_time != 0 {
                 min = process.sleep_time;
-            } else if min != 0 && process.sleep_time < min && process.sleep_time != 0 {
+            } else if process.sleep_time < min && process.sleep_time != 0 {
                 min = process.sleep_time;
             }
         }
@@ -137,14 +132,13 @@ impl RoundRobin {
             ready_process.timings.0 = ready_process.timings.0 + beginning - end;
         }
 
-        let mut index = 0;
         let mut index_vec = VecDeque::<usize>::new();
 
-        for waiting_process in &mut self.waiting_process_queue {
+        for (index, waiting_process) in self.waiting_process_queue.iter_mut().enumerate() {
             waiting_process.timings.0 = waiting_process.timings.0 + beginning - end;
             if waiting_process.sleep_time > 0 {
                 if waiting_process.sleep_time > (beginning - end) {
-                    waiting_process.sleep_time = waiting_process.sleep_time - (beginning - end);
+                    waiting_process.sleep_time -= beginning - end;
                 } else {
                     waiting_process.sleep_time = 0;
                     waiting_process.state = ProcessState::Ready;
@@ -152,7 +146,6 @@ impl RoundRobin {
                     index_vec.push_front(index);
                 }
             }
-            index += 1;
         }
 
         for index in index_vec {
@@ -161,10 +154,8 @@ impl RoundRobin {
     }
 
     pub fn killed_init(&self) -> bool {
-        if !self.waiting_process_queue.is_empty() || !self.ready_process_queue.is_empty() {
-            if self.killed_init == true {
-                return true;
-            }
+        if (!self.waiting_process_queue.is_empty() || !self.ready_process_queue.is_empty()) && self.killed_init == true {
+            return true;
         }
         false
     }
@@ -234,7 +225,7 @@ impl Scheduler for RoundRobin {
                 }
                 
                 if let Some(process) = &mut self.running_process {
-                    process.timings.2 = process.timings.2 + process.remaining_slices;
+                    process.timings.2 += process.remaining_slices;
                     process.remaining_slices = self.timeslice;
 
                     process.state = ProcessState::Ready;
@@ -309,23 +300,16 @@ impl Scheduler for RoundRobin {
                             return crate::SyscallResult::NoRunningProcess;
                         }    
 
-                        let mut index: usize = 0;
                         let mut index_vec = VecDeque::new();
 
-                        for process in &mut self.waiting_process_queue {
-                            match process.state {
-                                ProcessState::Waiting { event} => {
-                                    if let Some(event) = event {
-                                        if event == event_number {
-                                            process.state = ProcessState::Ready;
-                                            self.ready_process_queue.push_back(process.clone());
-                                            index_vec.push_front(index);
-                                        }
-                                    }
+                        for (index, process) in self.waiting_process_queue.iter_mut().enumerate() {
+                            if let ProcessState::Waiting { event: Some(event) } = process.state {
+                                if event == event_number {
+                                    process.state = ProcessState::Ready;
+                                    self.ready_process_queue.push_back(process.clone());
+                                    index_vec.push_front(index);
                                 }
-                                _ => {}
                             }
-                            index += 1;
                         }
 
                         for index in index_vec {
