@@ -23,7 +23,11 @@ pub struct ProcessInfo {
 
     /// Extra details about the process
     pub extra: String,
+
+    /// Remaining slices
     pub remaining_slices: usize,
+
+    /// How much a process must sleep
     pub sleep_time: usize,
 }
 
