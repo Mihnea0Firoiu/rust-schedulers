@@ -114,9 +114,7 @@ impl RoundRobin {
     pub fn minimum_sleeping_duration(&self) -> usize {
         let mut min = 0;
         for process in &self.waiting_process_queue {
-            if min == 0 && process.sleep_time != 0 {
-                min = process.sleep_time;
-            } else if process.sleep_time < min && process.sleep_time != 0 {
+            if process.sleep_time != 0 && (min == 0 || process.sleep_time < min) {
                 min = process.sleep_time;
             }
         }
@@ -154,7 +152,7 @@ impl RoundRobin {
     }
 
     pub fn killed_init(&self) -> bool {
-        if (!self.waiting_process_queue.is_empty() || !self.ready_process_queue.is_empty()) && self.killed_init == true {
+        if (!self.waiting_process_queue.is_empty() || !self.ready_process_queue.is_empty()) && self.killed_init {
             return true;
         }
         false
@@ -206,7 +204,7 @@ impl Scheduler for RoundRobin {
                     return crate::SchedulingDecision::Done;
                 }
 
-                if self.all_waiting() == true {
+                if self.all_waiting() {
                     return crate::SchedulingDecision::Deadlock;
                 }
                 
