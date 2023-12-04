@@ -17,6 +17,9 @@ pub struct ProcessInfo {
     /// The process timings (total time, system call time, running time).
     pub timings: (usize, usize, usize),
 
+    /// The initial process priority
+    pub initial_priority: i8,
+
     /// The process priority
     pub priority: i8,
 
@@ -36,6 +39,7 @@ impl ProcessInfo {
             pid,
             state: ProcessState::Ready,
             timings: (0, 0, 0),
+            initial_priority: priority,
             priority,
             extra: String::new(),
             remaining_slices: timeslice,
@@ -72,11 +76,24 @@ impl Clone for ProcessInfo {
             pid: self.pid,
             state: self.state,
             timings: self.timings,
+            initial_priority: self.initial_priority,
             priority: self.priority,
             extra: self.extra.clone(),
             remaining_slices: self.remaining_slices,
             sleep_time: self.sleep_time,
         }
+    }
+}
+
+impl PartialEq for ProcessInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.priority == other.priority
+    }
+}
+
+impl PartialOrd for ProcessInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.priority.cmp(&other.priority))
     }
 }
 
@@ -160,6 +177,12 @@ impl PriorityQueue {
         }
         false
     }
+
+    pub fn sort(&mut self) {
+        let mut sorted_vec: Vec<ProcessInfo> = self.ready_process_queue.drain(..).collect();
+        sorted_vec.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        self.ready_process_queue.extend(sorted_vec);
+    }
 }
 
 impl Scheduler for PriorityQueue {
@@ -176,6 +199,10 @@ impl Scheduler for PriorityQueue {
         if let Some(process) = &mut self.running_process {
             let mut timeslice = self.timeslice;
             if process.remaining_slices < self.minimum_remaining_timeslice {
+                if process.priority < process.initial_priority {
+                    process.priority += 1;
+                }
+
                 process.remaining_slices = timeslice;
 
                 process.state = ProcessState::Ready;
@@ -189,6 +216,8 @@ impl Scheduler for PriorityQueue {
                 return crate::SchedulingDecision::Run { pid: process.pid(), timeslice: NonZeroUsize::new(timeslice).unwrap() };
             }
         }
+
+        self.sort();
 
         let first_element = self.ready_process_queue.pop_front();
         self.running_process = first_element;
@@ -230,6 +259,11 @@ impl Scheduler for PriorityQueue {
                     process.remaining_slices = self.timeslice;
 
                     process.state = ProcessState::Ready;
+
+                    if process.priority >= 1 {
+                        process.priority -= 1;
+                    }
+
                     self.ready_process_queue.push_back(process.clone());
                     self.running_process = None;
 
@@ -247,6 +281,10 @@ impl Scheduler for PriorityQueue {
                 }
 
                 if let Some(process) = &mut self.running_process {
+                    // if process.priority < process.initial_priority && remaining < self.minimum_remaining_timeslice {
+                    //     process.priority += 1;
+                    // }
+
                     process.timings.1 += 1;
                     process.timings.2 = process.timings.2 + process.remaining_slices - remaining - 1;
                     process.remaining_slices = remaining;
@@ -271,6 +309,10 @@ impl Scheduler for PriorityQueue {
                         }
                         
                         if let Some(process) = &mut self.running_process {
+                            if process.priority < process.initial_priority {
+                                process.priority += 1;
+                            }
+
                             process.sleep_time = time;
                             process.state = ProcessState::Waiting { event: None };
                             process.remaining_slices = self.timeslice;
@@ -287,6 +329,10 @@ impl Scheduler for PriorityQueue {
                         }
 
                         if let Some(process) = &mut self.running_process {
+                            if process.priority < process.initial_priority {
+                                process.priority += 1;
+                            }
+
                             process.state = ProcessState::Waiting { event: Some(event_number) };
                             process.remaining_slices = self.timeslice;
                             self.waiting_process_queue.push_back(process.clone());
@@ -324,7 +370,7 @@ impl Scheduler for PriorityQueue {
                             return crate::SyscallResult::NoRunningProcess;
                         }
 
-                        if let Some(process) = &self.running_process {
+                        if let Some(process) = &mut self.running_process {
                             if process.pid == Pid::new(1) {
                                 self.killed_init = true;
                             }
