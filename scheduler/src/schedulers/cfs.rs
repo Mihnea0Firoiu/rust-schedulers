@@ -1,5 +1,6 @@
 use crate::{Scheduler, Process};
 
+use std::cmp::Ordering;
 use std::num::NonZeroUsize;
 use crate::Pid;
 use crate::ProcessState;
@@ -95,6 +96,12 @@ impl PartialEq for ProcessInfo {
 
 impl PartialOrd for ProcessInfo {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let ord = self.vruntime.cmp(&other.vruntime);
+        
+        if let Ordering::Equal = ord {
+            return Some(self.pid.cmp(&other.pid));
+        }
+
         Some(self.vruntime.cmp(&other.vruntime))
     }
 }
@@ -186,6 +193,7 @@ impl Cfs {
                 } else {
                     waiting_process.sleep_time = 0;
                     waiting_process.state = ProcessState::Ready;
+                    waiting_process.remaining_slices = self.timeslice;
                     self.ready_process_queue.push_back(waiting_process.clone());
                     index_vec.push_front(index);
                 }
@@ -210,18 +218,19 @@ impl Cfs {
         self.ready_process_queue.extend(sorted_vec);
     }
 
-    pub fn update_timeslice(&mut self) {
+    pub fn update_timeslice(&mut self) -> usize {
+        let old_timeslice = self.timeslice;
         match &self.running_process {
             Some(_) => {
                 self.timeslice = self.cpu_time / (self.ready_process_queue.len() + 1);
             },
             None => {
-                if self.ready_process_queue.len() != 0 {
+                if !self.ready_process_queue.is_empty() {
                     self.timeslice = self.cpu_time / (self.ready_process_queue.len());
                 }
             }
         }
-        
+        old_timeslice
     }
 
     pub fn update_vruntime(&mut self) -> usize {
@@ -287,7 +296,7 @@ impl Scheduler for Cfs {
             self.time_jump = 0;
         }
 
-        self.update_timeslice();
+        let old_timeslice = self.update_timeslice();
 
         if let Some(process) = &mut self.running_process {
             let mut timeslice = self.timeslice;
@@ -301,7 +310,7 @@ impl Scheduler for Cfs {
                 self.running_process = None;
 
             } else {
-                if self.timeslice < process.remaining_slices {
+                if self.timeslice < process.remaining_slices || process.remaining_slices == old_timeslice {
                     process.remaining_slices = self.timeslice;
                 }
 
@@ -318,9 +327,7 @@ impl Scheduler for Cfs {
             Some(first_element) => {
                 first_element.state = ProcessState::Running;
 
-                if self.timeslice < first_element.remaining_slices {
-                    first_element.remaining_slices = self.timeslice;
-                }
+                first_element.remaining_slices = self.timeslice;
                 
                 crate::SchedulingDecision::Run { pid: first_element.pid(), timeslice: NonZeroUsize::new(first_element.remaining_slices).unwrap() }
             },
