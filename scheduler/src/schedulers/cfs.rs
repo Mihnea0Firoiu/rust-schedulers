@@ -193,7 +193,6 @@ impl Cfs {
                 } else {
                     waiting_process.sleep_time = 0;
                     waiting_process.state = ProcessState::Ready;
-                    waiting_process.remaining_slices = self.timeslice;
                     self.ready_process_queue.push_back(waiting_process.clone());
                     index_vec.push_front(index);
                 }
