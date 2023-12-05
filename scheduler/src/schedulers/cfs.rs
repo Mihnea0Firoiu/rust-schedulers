@@ -42,7 +42,7 @@ impl ProcessInfo {
             state: ProcessState::Ready,
             timings: (0, 0, 0),
             priority,
-            extra: String::new(),
+            extra: "vruntime=0".to_string(),
             remaining_slices: timeslice,
             sleep_time: 0,
             vruntime: 0,
@@ -216,7 +216,9 @@ impl Cfs {
                 self.timeslice = self.cpu_time / (self.ready_process_queue.len() + 1);
             },
             None => {
-                self.timeslice = self.cpu_time / (self.ready_process_queue.len());
+                if self.ready_process_queue.len() != 0 {
+                    self.timeslice = self.cpu_time / (self.ready_process_queue.len());
+                }
             }
         }
         
@@ -245,6 +247,33 @@ impl Cfs {
 
         min
     }
+
+    pub fn update_extra(&mut self) {
+        let vruntime = "vruntime=".to_string();
+
+        if let Some(process) = &mut self.running_process {
+            let pr_vruntime = process.vruntime.to_string();
+            let mut vruntime_clone = vruntime.clone();
+            vruntime_clone.push_str(&pr_vruntime);
+            process.extra = vruntime_clone;
+        }
+
+        for process in &mut self.ready_process_queue {
+            let pr_vruntime = process.vruntime.to_string();
+            let mut vruntime_clone = vruntime.clone();
+            vruntime_clone.push_str(&pr_vruntime);
+            process.extra = vruntime_clone;
+        }
+
+        for process in &mut self.waiting_process_queue {
+            let pr_vruntime = process.vruntime.to_string();
+            let mut vruntime_clone = vruntime.clone();
+            vruntime_clone.push_str(&pr_vruntime);
+            process.extra = vruntime_clone;
+        }
+
+    }
+
 }
 
 impl Scheduler for Cfs {
@@ -442,16 +471,17 @@ impl Scheduler for Cfs {
 
     fn list(&mut self) -> Vec<&dyn crate::Process> {
         let mut all_processes: VecDeque<&dyn crate::Process> = VecDeque::new();
+        self.update_extra();
 
-        if let Some(running_process) = &self.running_process {
+        if let Some(running_process) = &mut self.running_process {
             all_processes.push_back(running_process);
         }
 
-        for process in &self.ready_process_queue {
+        for process in &mut self.ready_process_queue {
             all_processes.push_back(process);
         }
 
-        for process in &self.waiting_process_queue {
+        for process in &mut self.waiting_process_queue {
             all_processes.push_back(process);
         }
 
