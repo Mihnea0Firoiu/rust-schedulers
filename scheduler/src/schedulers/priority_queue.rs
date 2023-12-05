@@ -48,6 +48,7 @@ impl ProcessInfo {
     }
 }
 
+/// Implemented 'Process' trait for ProcessInfo.
 impl Process for ProcessInfo {
     fn pid(&self) -> Pid {
         self.pid
@@ -70,6 +71,7 @@ impl Process for ProcessInfo {
     }
 }
 
+/// Implemented 'Clone' trait for ProcessInfo.
 impl Clone for ProcessInfo {
     fn clone(&self) -> Self {
         Self {
@@ -85,12 +87,15 @@ impl Clone for ProcessInfo {
     }
 }
 
+/// For sort.
+/// Implemented 'PartialEq' trait for ProcessInfo.
 impl PartialEq for ProcessInfo {
     fn eq(&self, other: &Self) -> bool {
         self.priority == other.priority
     }
 }
 
+/// Implemented 'PartialOrd' trait for ProcessInfo.
 impl PartialOrd for ProcessInfo {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.priority.cmp(&other.priority))
@@ -98,13 +103,29 @@ impl PartialOrd for ProcessInfo {
 }
 
 pub struct PriorityQueue {
+    /// The maximum amout a process is allowed to run until it is preemted
     pub timeslice: usize,
+
+    /// The process will be scheduled again if the
+    /// remaining slices are greater or equal to this value.
     pub minimum_remaining_timeslice: usize,
+
+    /// The last used pid.
     pub last_pid: usize,
+
+    /// Field to hold the running process.
     pub running_process: Option<ProcessInfo>,
+
+    /// Queue to hold the processes that are ready.
     pub ready_process_queue: VecDeque<ProcessInfo>,
+
+    /// Queue to hold the processes that are waiting.
     pub waiting_process_queue: VecDeque<ProcessInfo>,
+
+    /// Field that tells the scheduler how much to sleep.
     pub time_jump: usize,
+
+    /// Field that tells if init was killed.
     pub killed_init: bool
 }
 
@@ -122,6 +143,7 @@ impl PriorityQueue {
         }
     }
 
+    /// Checks if all processes from the waiting queue are waiting.
     pub fn all_waiting(&self) -> bool {
         for process in &self.waiting_process_queue {
             if let ProcessState::Waiting { event: None } = process.state {
@@ -131,6 +153,7 @@ impl PriorityQueue {
         true
     }
 
+    /// Finds the minimum amount for the scheduler to sleep.
     pub fn minimum_sleeping_duration(&self) -> usize {
         let mut min = 0;
         for process in &self.waiting_process_queue {
@@ -141,6 +164,7 @@ impl PriorityQueue {
         min
     }
 
+    /// Function that calculates time.
     pub fn time_master(&mut self, beginning: usize, end: usize) {
         if let Some(running_process) = &mut self.running_process {
             running_process.timings.0 = running_process.timings.0 + beginning - end;
@@ -171,6 +195,7 @@ impl PriorityQueue {
         }
     }
 
+    /// Returns 'true' if init was killed too soon.
     pub fn killed_init(&self) -> bool {
         if (!self.waiting_process_queue.is_empty() || !self.ready_process_queue.is_empty()) && self.killed_init {
             return true;
@@ -178,14 +203,17 @@ impl PriorityQueue {
         false
     }
 
+    /// Sorts 'ready_process_queue' according to 'priority'
     pub fn sort(&mut self) {
         let mut sorted_vec: Vec<ProcessInfo> = self.ready_process_queue.drain(..).collect();
+        // The compare never fails
         sorted_vec.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
         self.ready_process_queue.extend(sorted_vec);
     }
 }
 
 impl Scheduler for PriorityQueue {
+    /// Makes a decision about scheduling.
     fn next(&mut self) -> crate::SchedulingDecision {
         if self.killed_init() {
             return crate::SchedulingDecision::Panic;
@@ -198,7 +226,10 @@ impl Scheduler for PriorityQueue {
 
         if let Some(process) = &mut self.running_process {
             let mut timeslice = self.timeslice;
+
+            // The process goes in ready.
             if process.remaining_slices < self.minimum_remaining_timeslice {
+                // Change priority.
                 if process.priority < process.initial_priority {
                     process.priority += 1;
                 }
@@ -212,23 +243,30 @@ impl Scheduler for PriorityQueue {
                 self.running_process = None;
 
             } else {
+                // The process runs with how much time has left.
                 timeslice = process.remaining_slices;
+
+                // 'timeslice' will never be 0 or smaller than 0, so 'unwrap' was used.
                 return crate::SchedulingDecision::Run { pid: process.pid(), timeslice: NonZeroUsize::new(timeslice).unwrap() };
             }
         }
 
+        // Sort the 'ready_process_queue' before poping an element.
         self.sort();
 
         let first_element = self.ready_process_queue.pop_front();
         self.running_process = first_element;
         match &mut self.running_process {
             Some(first_element) => {
+                // If there is a least an elemet in 'ready_process_queue'
                 first_element.state = ProcessState::Running;
+                // 'timeslice' will never be 0 or smaller than 0, so 'unwrap' was used.
                 crate::SchedulingDecision::Run { pid: first_element.pid(), timeslice: NonZeroUsize::new(first_element.remaining_slices).unwrap() }
             },
             None => {
                 self.time_jump = self.minimum_sleeping_duration();
                 if self.time_jump != 0 {
+                    // 'timeslice' will never be 0 or smaller than 0, so 'unwrap' was used.
                     return crate::SchedulingDecision::Sleep(NonZeroUsize::new(self.time_jump).unwrap());
                 }
                 
@@ -245,8 +283,11 @@ impl Scheduler for PriorityQueue {
         }
     }
 
+    /// Does something when a process expires or make a syscall.
     fn stop(&mut self, _reason: crate::StopReason) -> crate::SyscallResult {
         match _reason {
+
+            // The behaviour for 'Expired'
             crate::StopReason::Expired => {
 
                 if let Some(process) = &mut self.running_process {
@@ -260,6 +301,7 @@ impl Scheduler for PriorityQueue {
 
                     process.state = ProcessState::Ready;
 
+                    // Change priority.
                     if process.priority >= 1 {
                         process.priority -= 1;
                     }
@@ -288,11 +330,13 @@ impl Scheduler for PriorityQueue {
                 }
 
                 match syscall {
+                    // The behaviour for 'Fork'
                     Syscall::Fork(priority) => {
                         if self.running_process.is_none() && self.last_pid != 0 {
                             return crate::SyscallResult::NoRunningProcess;
                         }
 
+                        // Change priority.
                         if let Some(process) = &mut self.running_process {
                             if process.priority < process.initial_priority && remaining >= self.minimum_remaining_timeslice {
                                 process.priority += 1;
@@ -306,12 +350,14 @@ impl Scheduler for PriorityQueue {
 
                         crate::SyscallResult::Pid(pid)
                     }
+                    // The behaviour for 'Sleep'
                     Syscall::Sleep(time) => {
                         if self.running_process.is_none() {
                             return crate::SyscallResult::NoRunningProcess;
                         }
                         
                         if let Some(process) = &mut self.running_process {
+                            // Change priority.
                             if process.priority < process.initial_priority {
                                 process.priority += 1;
                             }
@@ -326,12 +372,14 @@ impl Scheduler for PriorityQueue {
 
                         crate::SyscallResult::Success
                     }
+                    // The behaviour for 'Wait'
                     Syscall::Wait(event_number) => {
                         if self.running_process.is_none() {
                             return crate::SyscallResult::NoRunningProcess;
                         }
 
                         if let Some(process) = &mut self.running_process {
+                            // Change priority.
                             if process.priority < process.initial_priority {
                                 process.priority += 1;
                             }
@@ -345,6 +393,7 @@ impl Scheduler for PriorityQueue {
 
                         crate::SyscallResult::Success
                     }
+                    // The behaviour for 'Signal'
                     Syscall::Signal(event_number) => {
                         if self.running_process.is_none() {
                             return crate::SyscallResult::NoRunningProcess;
@@ -368,6 +417,7 @@ impl Scheduler for PriorityQueue {
 
                         crate::SyscallResult::Success
                     }
+                    // The behaviour for 'Exit'
                     Syscall::Exit => {
                         if self.running_process.is_none() {
                             return crate::SyscallResult::NoRunningProcess;
@@ -388,6 +438,7 @@ impl Scheduler for PriorityQueue {
         }
     }
 
+    /// Takes all the processes and puts them in a common 'Vec<&dyn crate::Process>'.
     fn list(&mut self) -> Vec<&dyn crate::Process> {
         let mut all_processes: VecDeque<&dyn crate::Process> = VecDeque::new();
 
