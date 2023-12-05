@@ -64,5 +64,5 @@ pub fn priority_queue(
 ///                                 the `minimum_remaining_timeslice` value.
 #[allow(unused_variables)]
 pub fn cfs(cpu_time: NonZeroUsize, minimum_remaining_timeslice: usize) -> impl Scheduler {
-    Cfs
+    Cfs::new(cpu_time, minimum_remaining_timeslice)
 }
